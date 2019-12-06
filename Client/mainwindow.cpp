@@ -5,9 +5,10 @@
 #include <QtDebug>
 #include <string>
 #include <iostream>
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget *parent, serverConnection *connection)
+    : QMainWindow(parent),
+    ui(new Ui::MainWindow),
+    conn(connection)
 {
     ui->setupUi(this);
 }
@@ -17,22 +18,30 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_pushButton_login_clicked()
+struct tempInfo
 {
-    serverConnection *conn = new serverConnection;
-    const char* ip = "127.0.0.1";
-    conn->connectTo(ip);
     char username[100];
     char password[100];
-    strcpy(username, ui->lineEdit_username->text().toStdString().c_str());
-    strcpy(password, ui->lineEdit_password->text().toStdString().c_str());
-    char info[100];
-    int res;
-    sprintf(info, "%s:%s", username, password);
+};
 
-    if (write(conn->sd, info, sizeof(info)) <= 0)
+void MainWindow::on_pushButton_login_clicked()
+{
+
+    tempInfo *info = new tempInfo;
+    strcpy(info->username, ui->lineEdit_username->text().toStdString().c_str());
+    strcpy(info->password, ui->lineEdit_password->text().toStdString().c_str());
+    int res;
+    if(ui->lineEdit_username->text().toStdString().empty() or ui->lineEdit_password->text().toStdString().empty())
+    {
+        ui->statusbar->showMessage("Username or password cannot be empty!");
+        return;
+    }
+    std::cout << info->username << "\n" << info->password << '\n';
+    if (write(conn->sd, info, sizeof(tempInfo)) <= 0)
     {
         perror("[client]Eroare la write() spre server.\n");
+        ui->statusbar->showMessage("Cannot connect to server! Please check your connection!");
+        return;
     }
     if (read(conn->sd, &res, sizeof(int)) < 0)
     {

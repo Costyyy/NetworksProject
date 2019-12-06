@@ -78,7 +78,3 @@ void AppWindow::on_pushButton_create_clicked()
     gameWindow->show();
 }
 
-void AppWindow::on_pushButton_test_clicked()
-{
-
-}

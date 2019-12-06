@@ -7,55 +7,7 @@
    Autor: Lenuta Alboaie  <adria@infoiasi.ro> (c)2009
 */
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <errno.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <pthread.h>
-#include <sqlite3.h>
-#include <string>
-#include <iostream>
-/* portul folosit */
-#define PORT 14821
-
-/* codul de eroare returnat de anumite apeluri */
-extern int errno;
-
-typedef struct thData
-{
-  int idThread; //id-ul thread-ului tinut in evidenta de acest program
-  int cl;       //descriptorul intors de accept
-  int rc;       //database descriptor
-  sqlite3 *db;
-
-} thData;
-
-struct userInfo
-{
-  int id;
-  std::string username;
-  std::string password;
-  bool valid = false;
-};
-
-static void *treat(void *); /* functia executata de fiecare thread ce realizeaza comunicarea cu clientii */
-userInfo *connectClient(void *);
-void processClient(void *, void *);
-int read_line(FILE *fp, char *usr)
-{
-  char tmp[256] = {0};
-  while (fp && fgets(tmp, sizeof(tmp), fp))
-  {
-    if (strstr(tmp, usr))
-      return 1;
-  }
-  return 0;
-}
+#include "server.h"
 
 int main()
 {
@@ -146,23 +98,23 @@ static void *treat(void *arg)
   fflush(stdout);
   pthread_detach(pthread_self());
   userInfo *temp;
-  temp = connectClient((struct thData *)arg);
+  bool dc = false;
+  do
+  {
+    dc = false;
+    temp = connectClient((struct thData *)arg);
 
-  //process the client's requests
-  processClient((struct thData *)arg, temp);
+    //process the client's requests
+    if (temp != nullptr)
+      dc = processClient((struct thData *)arg, temp);
+  }while(dc);
+
   close((intptr_t)arg);
   printf("Disconnected\n");
   return (NULL);
 };
 
-struct GameData
-{
-  char user[100][50];
-  int gameId[50];
-  int count = 0;
-};
-
-
+//get data about the championships from the database
 int callback_update(void *data, int argc, char **argv, char **azColName)
 {
   int i;
@@ -175,31 +127,35 @@ int callback_update(void *data, int argc, char **argv, char **azColName)
   return 0;
 }
 
-void sendUpdate(void *arg0, void *arg1)
+bool sendUpdate(void *arg0, void *arg1)
 {
   thData tdL = *((struct thData *)arg0);
   userInfo *uAcc = (struct userInfo *)arg1;
   GameData *gData = new GameData;
-  char *stmt = "select username, game_id from championships natural join accounts;";
-  sqlite3_exec(tdL.db, stmt, callback_update, gData, nullptr);
+  sqlite3_exec(tdL.db, "select username, game_id from championships natural join accounts;", callback_update, gData, nullptr);
   if (write(tdL.cl, gData, sizeof(GameData)) <= 0)
   {
     printf("error\n");
+    return true;
   }
+  return false;
 }
 
-void createEntry(void *arg0, void *arg1)
+bool createEntry(void *arg0, void *arg1)
 {
   thData tdL = *((struct thData *)arg0);
   userInfo *uAcc = (struct userInfo *)arg1;
   int gameId;
-  read(tdL.cl, &gameId, sizeof(int));
+  if ((read(tdL.cl, &gameId, sizeof(int))) <= 0)
+  {
+    return true;
+  }
   char stmt[128];
   sprintf(stmt, "insert into championships values (%d,%d);", uAcc->id, gameId);
   sqlite3_exec(tdL.db, stmt, nullptr, nullptr, nullptr);
 }
 
-void processClient(void *arg, void *userData)
+bool processClient(void *arg, void *userData)
 {
   thData tdL = *((struct thData *)arg);
   userInfo *uAcc = (struct userInfo *)userData;
@@ -212,20 +168,22 @@ void processClient(void *arg, void *userData)
     {
       printf("[Thread %d]\n", tdL.idThread);
       perror("Eroare la read() de la client.\n");
+      return false;
     }
     switch (req)
     {
     case 0:
-      done = true;
+      uAcc->valid = false;
+      return true;
       break;
     case 1:
       printf("Message received\n");
       break;
     case 2:
-      sendUpdate(arg, userData);
+      done = sendUpdate(arg, userData);
       break;
     case 3:
-      createEntry(arg, userData);
+      done = createEntry(arg, userData);
       break;
     }
   }
@@ -249,22 +207,21 @@ static int callback(void *user, int argc, char **argv, char **azColName)
 userInfo *connectClient(void *arg)
 {
   int nr, i = 0;
-  char info[100];
   thData tdL;
   userInfo *uAcc = new userInfo;
+  tempInfo *tempAcc = new tempInfo;
   tdL = *((struct thData *)arg);
 
-  if (read(tdL.cl, info, 100) <= 0)
+  if (read(tdL.cl, tempAcc, sizeof(tempInfo)) <= 0)
   {
     printf("[Thread %d]\n", tdL.idThread);
     perror("Eroare la read() de la client.\n");
+    return nullptr;
   }
-  std::string userAcc = info;
-  std::size_t pos = userAcc.find(":");
-  uAcc->username = userAcc.substr(0, pos);
-  uAcc->password = userAcc.substr(pos + 1);
-  std::cout << uAcc->username << '\n';
-  std::cout << uAcc->password << '\n';
+  uAcc->username = tempAcc->username;
+  uAcc->password = tempAcc->password;
+  std::cout << tempAcc->username << '\n';
+  std::cout << tempAcc->password << '\n';
   char stmt[512];
   int res;
   char *zErrMsg = 0;
@@ -272,6 +229,7 @@ userInfo *connectClient(void *arg)
   sqlite3_exec(tdL.db, stmt, callback, (void *)uAcc, &zErrMsg);
   if (uAcc->valid)
   {
+
     res = 1;
     write(tdL.cl, &res, sizeof(int));
   }
@@ -282,16 +240,4 @@ userInfo *connectClient(void *arg)
   }
 
   return uAcc;
-  /*pregatim mesajul de raspuns */
-  //printf("[Thread %d]Trimitem mesajul inapoi...%d\n",tdL.idThread, nr);
-
-  /* returnam mesajul clientului */
-  /*if (write (tdL.cl, &nr, sizeof(int)) <= 0)
-		{
-		 printf("[Thread %d] ",tdL.idThread);
-		 perror ("[Thread]Eroare la write() catre client.\n");
-		}
-	else
-		printf ("[Thread %d]Mesajul a fost trasmis cu succes.\n",tdL.idThread);	
-*/
 }

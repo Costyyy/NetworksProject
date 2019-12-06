@@ -13,7 +13,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(QWidget *parent = nullptr, serverConnection *connection = nullptr);
 
     ~MainWindow();
 
@@ -24,5 +24,6 @@ private slots:
 private:
     Ui::MainWindow *ui;
     AppWindow *appWindow;
+    serverConnection *conn;
 };
 #endif // MAINWINDOW_H

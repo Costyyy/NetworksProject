@@ -25,6 +25,8 @@ private slots:
 
     void on_pushButton_create_clicked();
 
+    void on_AppWindow_destroyed();
+
 private:
     Ui::AppWindow *ui;
 };

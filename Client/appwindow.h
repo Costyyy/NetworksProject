@@ -21,6 +21,10 @@ private slots:
 
     void on_pushButton_test_clicked();
 
+    void on_pushButton_refresh_clicked();
+
+    void on_pushButton_create_clicked();
+
 private:
     Ui::AppWindow *ui;
 };

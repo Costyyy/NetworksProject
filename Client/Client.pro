@@ -17,17 +17,20 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     appwindow.cpp \
+    creategame.cpp \
     main.cpp \
     mainwindow.cpp \
     serverconnection.cpp
 
 HEADERS += \
     appwindow.h \
+    creategame.h \
     mainwindow.h \
     serverconnection.h
 
 FORMS += \
     appwindow.ui \
+    creategame.ui \
     mainwindow.ui
 
 # Default rules for deployment.

@@ -37,6 +37,7 @@ typedef struct thData
 
 struct userInfo
 {
+  int id;
   std::string username;
   std::string password;
   bool valid = false;
@@ -154,6 +155,50 @@ static void *treat(void *arg)
   return (NULL);
 };
 
+struct GameData
+{
+  char user[100][50];
+  int gameId[50];
+  int count = 0;
+};
+
+
+int callback_update(void *data, int argc, char **argv, char **azColName)
+{
+  int i;
+  struct GameData *gData = (struct GameData *)data;
+  char stmt[128];
+
+  //printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+  (gData->gameId)[(gData->count)] = atoi(argv[1]);
+  strcpy((gData->user)[(gData->count)++], argv[0]);
+  return 0;
+}
+
+void sendUpdate(void *arg0, void *arg1)
+{
+  thData tdL = *((struct thData *)arg0);
+  userInfo *uAcc = (struct userInfo *)arg1;
+  GameData *gData = new GameData;
+  char *stmt = "select username, game_id from championships natural join accounts;";
+  sqlite3_exec(tdL.db, stmt, callback_update, gData, nullptr);
+  if (write(tdL.cl, gData, sizeof(GameData)) <= 0)
+  {
+    printf("error\n");
+  }
+}
+
+void createEntry(void *arg0, void *arg1)
+{
+  thData tdL = *((struct thData *)arg0);
+  userInfo *uAcc = (struct userInfo *)arg1;
+  int gameId;
+  read(tdL.cl, &gameId, sizeof(int));
+  char stmt[128];
+  sprintf(stmt, "insert into championships values (%d,%d);", uAcc->id, gameId);
+  sqlite3_exec(tdL.db, stmt, nullptr, nullptr, nullptr);
+}
+
 void processClient(void *arg, void *userData)
 {
   thData tdL = *((struct thData *)arg);
@@ -168,30 +213,28 @@ void processClient(void *arg, void *userData)
       printf("[Thread %d]\n", tdL.idThread);
       perror("Eroare la read() de la client.\n");
     }
-    switch(req)
+    switch (req)
     {
-      case 0:
+    case 0:
       done = true;
       break;
-      case 1:
+    case 1:
       printf("Message received\n");
       break;
-      case 2:
-      sendUpdate();
+    case 2:
+      sendUpdate(arg, userData);
       break;
-      case 3:
-
+    case 3:
+      createEntry(arg, userData);
       break;
-
     }
-
-
   }
 }
 
 static int callback(void *user, int argc, char **argv, char **azColName)
 {
   userInfo *data = (userInfo *)user;
+  data->id = atoi(argv[2]);
   if ((strcmp((data->username).c_str(), argv[0]) == 0) && (strcmp((data->password).c_str(), argv[1]) == 0))
   {
     data->valid = true;
@@ -225,7 +268,7 @@ userInfo *connectClient(void *arg)
   char stmt[512];
   int res;
   char *zErrMsg = 0;
-  sprintf(stmt, "select username, password from accounts where username = '%s';", (uAcc->username).c_str());
+  sprintf(stmt, "select username, password, id from accounts where username = '%s';", (uAcc->username).c_str());
   sqlite3_exec(tdL.db, stmt, callback, (void *)uAcc, &zErrMsg);
   if (uAcc->valid)
   {

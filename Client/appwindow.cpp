@@ -1,6 +1,8 @@
 #include "appwindow.h"
 #include "ui_appwindow.h"
 #include "creategame.h"
+#include <string>
+#include <stdlib.h>
 AppWindow::AppWindow(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::AppWindow)
@@ -48,15 +50,7 @@ void AppWindow::on_pushButton_refresh_clicked()
     char matchStringData[256];
     for(int i = 0; i < gData->count; i++)
     {
-        switch(gData->gameId[i])
-        {
-        case 1:
-            sprintf(matchStringData, "%s-%s", gData->user[i],"CS:GO");
-            break;
-        case 2:
-            sprintf(matchStringData, "%s-%s", gData->user[i],"SMITE");
-            break;
-        }
+        sprintf(matchStringData, "%i-%s", gData->gameId[i], gData->user[i]);
 
 
         ui->listWidget_test->addItem(matchStringData);
@@ -78,3 +72,14 @@ void AppWindow::on_pushButton_create_clicked()
     gameWindow->show();
 }
 
+
+void AppWindow::on_pushButton_join_clicked()
+{
+    std::string match = ui->listWidget_test->currentItem()->text().toStdString();
+    char ch = match[0];
+    int gameId = (int)ch;
+    int req = 1;
+    write(this->conn->sd, &req, sizeof(int));
+    write(this->conn->sd, &gameId, sizeof(int));
+    //open game window
+}

@@ -26,7 +26,7 @@
     <string>Finish</string>
    </property>
   </widget>
-  <widget class="QWidget" name="">
+  <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
      <x>30</x>
@@ -39,7 +39,7 @@
     <item>
      <widget class="QLabel" name="label">
       <property name="text">
-       <string>Game:</string>
+       <string>Players</string>
       </property>
      </widget>
     </item>
@@ -47,41 +47,24 @@
      <widget class="QComboBox" name="comboBox_game">
       <item>
        <property name="text">
-        <string>CS:GO</string>
+        <string>2</string>
        </property>
       </item>
       <item>
        <property name="text">
-        <string>SMITE</string>
+        <string>5</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>10</string>
        </property>
       </item>
      </widget>
     </item>
    </layout>
   </widget>
-  <widget class="QWidget" name="">
-   <property name="geometry">
-    <rect>
-     <x>20</x>
-     <y>100</y>
-     <width>200</width>
-     <height>28</height>
-    </rect>
-   </property>
-   <layout class="QHBoxLayout" name="horizontalLayout_2">
-    <item>
-     <widget class="QLabel" name="label_2">
-      <property name="text">
-       <string>Date/Time:</string>
-      </property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QDateTimeEdit" name="dateTimeEdit"/>
-    </item>
-   </layout>
-  </widget>
-  <widget class="QWidget" name="">
+  <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
      <x>30</x>

@@ -19,9 +19,13 @@ int main()
   pthread_t th[100]; //Identificatorii thread-urilor care se vor crea
   int i = 0;
   sqlite3 *db;
+  questionCount = 0;
+  srand(time(NULL));
   //open the database
+  char stmt[256];
   int rc = sqlite3_open("./accounts", &db);
-
+  sprintf(stmt, "select question, answer1, answer2, answer3, answer4 from questions;");
+  sqlite3_exec(db, stmt, getQuestions, nullptr, nullptr);
   /* crearea unui socket */
   if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
   {
@@ -99,6 +103,7 @@ static void *treat(void *arg)
   pthread_detach(pthread_self());
   userInfo *temp;
   bool dc = false;
+  //allow the client to log back in
   do
   {
     dc = false;
@@ -107,7 +112,7 @@ static void *treat(void *arg)
     //process the client's requests
     if (temp != nullptr)
       dc = processClient((struct thData *)arg, temp);
-  }while(dc);
+  } while (dc);
 
   close((intptr_t)arg);
   printf("Disconnected\n");
@@ -132,7 +137,7 @@ bool sendUpdate(void *arg0, void *arg1)
   thData tdL = *((struct thData *)arg0);
   userInfo *uAcc = (struct userInfo *)arg1;
   GameData *gData = new GameData;
-  sqlite3_exec(tdL.db, "select username, game_id from championships natural join accounts;", callback_update, gData, nullptr);
+  sqlite3_exec(tdL.db, "select username, game_id from games natural join accounts;", callback_update, gData, nullptr);
   if (write(tdL.cl, gData, sizeof(GameData)) <= 0)
   {
     printf("error\n");
@@ -141,18 +146,139 @@ bool sendUpdate(void *arg0, void *arg1)
   return false;
 }
 
-bool createEntry(void *arg0, void *arg1)
+bool createGame(void *arg0, void *arg1)
 {
   thData tdL = *((struct thData *)arg0);
   userInfo *uAcc = (struct userInfo *)arg1;
-  int gameId;
-  if ((read(tdL.cl, &gameId, sizeof(int))) <= 0)
+  int gameId, playerCount;
+  //implement mutex here
+  if (read(tdL.cl, &playerCount, sizeof(int)) <= 0)
   {
+    printf("[Thread %d]\n", tdL.idThread);
+    perror("Eroare la read() de la client.\n");
     return true;
   }
+  //look for a spot for the game and claim it
+  for (gameId = 0; gameId < 100; gameId++)
+  {
+    if (games[gameId].active == false)
+    {
+      games[gameId].active = true;
+      games[gameId].maxPlayers = playerCount;
+      games[gameId].players[0] = tdL.cl;
+      games[gameId].playerNo = 1;
+      break;
+    }
+  }
   char stmt[128];
-  sprintf(stmt, "insert into championships values (%d,%d);", uAcc->id, gameId);
+  sprintf(stmt, "insert into games values (%d,%d);", gameId, uAcc->id);
   sqlite3_exec(tdL.db, stmt, nullptr, nullptr, nullptr);
+  //create thread for the game match
+  runGame(gameId, arg0);
+}
+
+static int getQuestions(void *data, int argc, char **argv, char **azColName)
+{
+  int id = atoi(argv[0]);
+  strcpy(qData[id].text, argv[1]);
+  strcpy(qData[id].answ1, argv[2]);
+  strcpy(qData[id].answ2, argv[3]);
+  strcpy(qData[id].answ3, argv[4]);
+  strcpy(qData[id].answ4, argv[5]);
+  questionCount++;
+}
+
+void runGame(int gameId, void *arg)
+{
+  thData tdL = *((struct thData *)arg);
+  matchData *game = &(games[gameId]);
+  char stmt[128];
+  int mess;
+  for(int i = 0; i < 10; i++)
+  {
+    game->score[i] = 0;
+  }
+  while (game->playerNo != game->maxPlayers)
+  {
+    //wait
+  }
+  //tell the clients that the game is starting
+  mess = 1;
+  for (int i = 0; i < game->maxPlayers; i++)
+  {
+    write(game->players[i], &mess, sizeof(int));
+    game->losers[i] = false;
+  }
+  int randQ, answ;
+  char buff[1024];
+  while (game->playerNo > 1)
+  {
+    for (int i = 0; i < game->maxPlayers; i++)
+    {
+      if (!(game->losers[i]))
+      {
+        //get random question
+        randQ = random() % questionCount;
+        //send question to client
+        if(write(game->players[i], &(qData[randQ]), sizeof(questions)) <= 0)
+        {
+          //error check
+        }
+        //wait for response
+        if(read(game->players[i], &answ, sizeof(int)) <= 0)
+        {
+          //error check
+        }
+        //check the answer
+        if(answ == 1)
+        {
+          mess = 1;
+          game->score[i] += 100;
+          if(write(game->players[i], &mess, sizeof(int)) <= 0)
+          {
+            //error check
+          }
+          
+        }
+        else
+        {
+          mess = 0;
+          game->losers[i] = true;
+          if(write(game->players[i], &mess, sizeof(int)) <= 0)
+          {
+            //error check
+          }
+        }
+        
+        //continue
+      }
+    }
+  } // while
+  //signal clients that the game has ended
+  mess = 2;
+  for(int i = 0; i < game->maxPlayers; i++)
+  {
+    if(write(game->players[i], &mess, sizeof(int)) <= 0)
+    {
+      //error check
+    }
+  }
+  game->active = false;
+}
+
+bool connectToGame(void *arg)
+{
+  thData tdL = *((struct thData *)arg);
+  //implement mutex
+  int gameId;
+  if (read(tdL.cl, &gameId, sizeof(int)) <= 0)
+  {
+    printf("[Thread %d]\n", tdL.idThread);
+    perror("Eroare la read() de la client.\n");
+    return true;
+  }
+  
+  games[gameId].players[games[gameId].playerNo++] = tdL.cl;
 }
 
 bool processClient(void *arg, void *userData)
@@ -173,17 +299,22 @@ bool processClient(void *arg, void *userData)
     switch (req)
     {
     case 0:
+      //logout
       uAcc->valid = false;
       return true;
       break;
     case 1:
-      printf("Message received\n");
-      break;
+      //connect to game
+      connectToGame(arg);
+          //block the thread until the game is over
+          break;
     case 2:
+      //sent data update
       done = sendUpdate(arg, userData);
       break;
     case 3:
-      done = createEntry(arg, userData);
+      //createGame
+      done = createGame(arg, userData);
       break;
     }
   }

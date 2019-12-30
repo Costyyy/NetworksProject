@@ -21,7 +21,18 @@ struct gameData
 
 void CreateGame::on_pushButton_finish_clicked()
 {
-    int gameId = ui->comboBox_game->currentIndex()+1;
-    write(conn->sd, &gameId, sizeof(int));
+    int playerCount;
+    switch (ui->comboBox_game->currentIndex()) {
+    case 0:
+        playerCount = 2;
+        break;
+    case 1:
+        playerCount = 5;
+        break;
+    case 2:
+        playerCount = 10;
+        break;
+    }
+    write(conn->sd, &playerCount, sizeof(int));
     this->close();
 }

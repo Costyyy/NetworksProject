@@ -27,6 +27,8 @@ private slots:
 
     void on_AppWindow_destroyed();
 
+    void on_pushButton_join_clicked();
+
 private:
     Ui::AppWindow *ui;
 };

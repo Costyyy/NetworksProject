@@ -1,6 +1,6 @@
 #include "creategame.h"
 #include "ui_creategame.h"
-
+#include "gamewindow.h"
 
 CreateGame::CreateGame(QWidget *parent, serverConnection *connection) :
     QDialog(parent),
@@ -34,5 +34,9 @@ void CreateGame::on_pushButton_finish_clicked()
         break;
     }
     write(conn->sd, &playerCount, sizeof(int));
+    GameWindow *gWindow = new GameWindow(this, conn);
     this->close();
+    gWindow->setModal(true);
+    gWindow->exec();
+
 }

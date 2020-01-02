@@ -16,15 +16,17 @@ int main()
   int nr; //mesajul primit de trimis la client
   int sd; //descriptorul de socket
   int pid;
-  pthread_t th[100]; //Identificatorii thread-urilor care se vor crea
+  pthread_t th[100];                       //Identificatorii thread-urilor care se vor crea
+  pthread_mutex_init(&mutexJoin, nullptr); //initiate mutex
+  pthread_mutex_init(&mutexSpot, nullptr);
   int i = 0;
   sqlite3 *db;
   questionCount = 0;
   srand(time(NULL));
   //open the database
-  char stmt[256];
+  char stmt[1024];
   int rc = sqlite3_open("./accounts", &db);
-  sprintf(stmt, "select question, answer1, answer2, answer3, answer4 from questions;");
+  sprintf(stmt, "select * from questions;");
   sqlite3_exec(db, stmt, getQuestions, nullptr, nullptr);
   /* crearea unui socket */
   if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -124,10 +126,10 @@ int callback_update(void *data, int argc, char **argv, char **azColName)
 {
   int i;
   struct GameData *gData = (struct GameData *)data;
-  char stmt[128];
-
+  std::cout << argc << '\n';
   //printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
   (gData->gameId)[(gData->count)] = atoi(argv[1]);
+
   strcpy((gData->user)[(gData->count)++], argv[0]);
   return 0;
 }
@@ -138,6 +140,7 @@ bool sendUpdate(void *arg0, void *arg1)
   userInfo *uAcc = (struct userInfo *)arg1;
   GameData *gData = new GameData;
   sqlite3_exec(tdL.db, "select username, game_id from games natural join accounts;", callback_update, gData, nullptr);
+
   if (write(tdL.cl, gData, sizeof(GameData)) <= 0)
   {
     printf("error\n");
@@ -158,6 +161,7 @@ bool createGame(void *arg0, void *arg1)
     perror("Eroare la read() de la client.\n");
     return true;
   }
+  pthread_mutex_lock(&mutexSpot);
   //look for a spot for the game and claim it
   for (gameId = 0; gameId < 100; gameId++)
   {
@@ -171,8 +175,9 @@ bool createGame(void *arg0, void *arg1)
     }
   }
   char stmt[128];
-  sprintf(stmt, "insert into games values (%d,%d);", gameId, uAcc->id);
+  sprintf(stmt, "insert into games values (%d,%d);", uAcc->id, gameId);
   sqlite3_exec(tdL.db, stmt, nullptr, nullptr, nullptr);
+  pthread_mutex_unlock(&mutexSpot);
   //create thread for the game match
   runGame(gameId, arg0);
 }
@@ -181,11 +186,12 @@ static int getQuestions(void *data, int argc, char **argv, char **azColName)
 {
   int id = atoi(argv[0]);
   strcpy(qData[id].text, argv[1]);
-  strcpy(qData[id].answ1, argv[2]);
-  strcpy(qData[id].answ2, argv[3]);
-  strcpy(qData[id].answ3, argv[4]);
-  strcpy(qData[id].answ4, argv[5]);
+  strcpy(qData[id].answ[0], argv[2]);
+  strcpy(qData[id].answ[1], argv[3]);
+  strcpy(qData[id].answ[2], argv[4]);
+  strcpy(qData[id].answ[3], argv[5]);
   questionCount++;
+  return 0;
 }
 
 void runGame(int gameId, void *arg)
@@ -194,7 +200,7 @@ void runGame(int gameId, void *arg)
   matchData *game = &(games[gameId]);
   char stmt[128];
   int mess;
-  for(int i = 0; i < 10; i++)
+  for (int i = 0; i < 10; i++)
   {
     game->score[i] = 0;
   }
@@ -203,13 +209,14 @@ void runGame(int gameId, void *arg)
     //wait
   }
   //tell the clients that the game is starting
-  mess = 1;
+  mess = 3;
   for (int i = 0; i < game->maxPlayers; i++)
   {
     write(game->players[i], &mess, sizeof(int));
     game->losers[i] = false;
   }
-  int randQ, answ;
+  int randQ, answ, ret;
+  struct pollfd fd;
   char buff[1024];
   while (game->playerNo > 1)
   {
@@ -220,65 +227,81 @@ void runGame(int gameId, void *arg)
         //get random question
         randQ = random() % questionCount;
         //send question to client
-        if(write(game->players[i], &(qData[randQ]), sizeof(questions)) <= 0)
+        mess = 1;
+        write(game->players[i], &mess, sizeof(int));
+        if (write(game->players[i], &(qData[randQ]), sizeof(questions)) <= 0)
         {
           //error check
         }
         //wait for response
-        if(read(game->players[i], &answ, sizeof(int)) <= 0)
+        fd.fd = game->players[i];
+        fd.events = POLLIN;
+        ret = poll(&fd, 1, 10000);
+        switch (ret)
         {
-          //error check
-        }
-        //check the answer
-        if(answ == 1)
-        {
-          mess = 1;
-          game->score[i] += 100;
-          if(write(game->players[i], &mess, sizeof(int)) <= 0)
+        case -1:
+          // Error
+          break;
+        case 0:
+          // Timeout
+          answ = -1;
+          break;
+        default:
+          if (read(game->players[i], &answ, sizeof(int)) <= 0)
           {
             //error check
           }
-          
+          break;
+        }
+
+        //check the answer
+        if (answ == 0)
+        {
+          mess = 4;
+          game->score[i] += 100;
+          if (write(game->players[i], &mess, sizeof(int)) <= 0)
+          {
+            //error check
+          }
         }
         else
         {
           mess = 0;
           game->losers[i] = true;
-          if(write(game->players[i], &mess, sizeof(int)) <= 0)
+          game->playerNo--;
+          if (write(game->players[i], &mess, sizeof(int)) <= 0)
           {
             //error check
           }
         }
-        
+
         //continue
       }
     }
   } // while
   //signal clients that the game has ended
   mess = 2;
-  for(int i = 0; i < game->maxPlayers; i++)
+  for (int i = 0; i < game->maxPlayers; i++)
   {
-    if(write(game->players[i], &mess, sizeof(int)) <= 0)
+    if (write(game->players[i], &mess, sizeof(int)) <= 0)
     {
       //error check
     }
   }
   game->active = false;
+  char stmt[256];
+  sprintf(stmt, "delete from games where game_id = %i", gameId);
+  sqlite3_exec(tdL.db, stmt, 0, 0, 0);
 }
 
-bool connectToGame(void *arg)
+bool connectToGame(void *arg, int gameId)
 {
   thData tdL = *((struct thData *)arg);
   //implement mutex
-  int gameId;
-  if (read(tdL.cl, &gameId, sizeof(int)) <= 0)
-  {
-    printf("[Thread %d]\n", tdL.idThread);
-    perror("Eroare la read() de la client.\n");
-    return true;
-  }
-  
+
+  pthread_mutex_lock(&mutexJoin);
   games[gameId].players[games[gameId].playerNo++] = tdL.cl;
+  pthread_mutex_unlock(&mutexJoin);
 }
 
 bool processClient(void *arg, void *userData)
@@ -305,9 +328,20 @@ bool processClient(void *arg, void *userData)
       break;
     case 1:
       //connect to game
-      connectToGame(arg);
-          //block the thread until the game is over
-          break;
+      int gameId;
+      if (read(tdL.cl, &gameId, sizeof(int)) <= 0)
+      {
+        printf("[Thread %d]\n", tdL.idThread);
+        perror("Eroare la read() de la client.\n");
+        return true;
+      }
+      connectToGame(arg, gameId);
+      while (games[gameId].active)
+      {
+        //wait
+      }
+      //block the thread until the game is over
+      break;
     case 2:
       //sent data update
       done = sendUpdate(arg, userData);
@@ -351,8 +385,6 @@ userInfo *connectClient(void *arg)
   }
   uAcc->username = tempAcc->username;
   uAcc->password = tempAcc->password;
-  std::cout << tempAcc->username << '\n';
-  std::cout << tempAcc->password << '\n';
   char stmt[512];
   int res;
   char *zErrMsg = 0;

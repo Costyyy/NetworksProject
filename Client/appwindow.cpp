@@ -1,8 +1,10 @@
 #include "appwindow.h"
 #include "ui_appwindow.h"
 #include "creategame.h"
+#include "gamewindow.h"
 #include <string>
 #include <stdlib.h>
+#include <iostream>
 AppWindow::AppWindow(QWidget *parent) :
     QDialog(parent),
     ui(new Ui::AppWindow)
@@ -17,8 +19,9 @@ AppWindow::~AppWindow()
 
 struct GameData
 {
-    char user[100][50];
-    int gameId[50];
+    int userId[100];
+    char user[100][100];
+    int gameId[100];
     int count = 0;
 };
 
@@ -48,10 +51,10 @@ void AppWindow::on_pushButton_refresh_clicked()
     }
     ui->listWidget_test->clear();
     char matchStringData[256];
+
     for(int i = 0; i < gData->count; i++)
     {
         sprintf(matchStringData, "%i-%s", gData->gameId[i], gData->user[i]);
-
 
         ui->listWidget_test->addItem(matchStringData);
     }
@@ -69,7 +72,9 @@ void AppWindow::on_pushButton_create_clicked()
         printf("error at write dc\n");
     }
     CreateGame *gameWindow = new CreateGame(this, conn);
-    gameWindow->show();
+    gameWindow->setModal(true);
+    //this->hide();
+    gameWindow->exec();
 }
 
 
@@ -77,9 +82,13 @@ void AppWindow::on_pushButton_join_clicked()
 {
     std::string match = ui->listWidget_test->currentItem()->text().toStdString();
     char ch = match[0];
-    int gameId = (int)ch;
+    int gameId = (int)ch - '0';
     int req = 1;
     write(this->conn->sd, &req, sizeof(int));
     write(this->conn->sd, &gameId, sizeof(int));
+    GameWindow *gameWindow = new GameWindow(this, conn);
+    gameWindow->setModal(true);
+    this->hide();
+    gameWindow->exec();
     //open game window
 }

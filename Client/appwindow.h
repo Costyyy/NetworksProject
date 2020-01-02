@@ -18,14 +18,9 @@ public:
 private slots:
     void on_pushButton_disconnect_clicked();
 
-
-    void on_pushButton_test_clicked();
-
     void on_pushButton_refresh_clicked();
 
     void on_pushButton_create_clicked();
-
-    void on_AppWindow_destroyed();
 
     void on_pushButton_join_clicked();
 

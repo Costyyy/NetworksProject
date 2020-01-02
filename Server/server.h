@@ -13,6 +13,7 @@
 #include <iostream>
 #include <random>
 #include <time.h>
+#include <poll.h>
 /* portul folosit */
 #define PORT 14821
 
@@ -44,13 +45,14 @@ struct tempInfo
 
 struct GameData
 {
+  int userId[100];
   char user[100][100];
   int gameId[100];
   int count = 0;
 };
 struct matchData
 {
-  bool active;
+  bool active = false;
   int players[10];
   int playerNo;
   int maxPlayers;
@@ -60,10 +62,7 @@ struct matchData
 struct questions
 {
   char text[256];
-  char answ1[128];
-  char answ2[128];
-  char answ3[128];
-  char answ4[128];
+  char answ[4][128];
 };
 questions qData[100];
 matchData games[100];
@@ -74,3 +73,5 @@ bool processClient(void *, void *);
 bool sendUpdate(void *, void *);
 void runGame(int, void*);
 static int getQuestions(void *, int, char **, char **);
+pthread_mutex_t mutexJoin;
+pthread_mutex_t mutexSpot;

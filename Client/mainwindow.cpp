@@ -54,6 +54,8 @@ void MainWindow::on_pushButton_login_clicked()
         ui->statusbar->showMessage("Login succesful!");
         appWindow = new AppWindow(this);
         appWindow->conn = conn;
+        appWindow->setModal(true);
+        this->hide();
         appWindow->show();
     }
     else

@@ -1,12 +1,3 @@
-/* servTCPConcTh2.c - Exemplu de server TCP concurent care deserveste clientii
-   prin crearea unui thread pentru fiecare client.
-   Asteapta un numar de la clienti si intoarce clientilor numarul incrementat.
-	Intoarce corect identificatorul din program al thread-ului.
-  
-   
-   Autor: Lenuta Alboaie  <adria@infoiasi.ro> (c)2009
-*/
-
 #include "server.h"
 
 int main()
@@ -26,7 +17,7 @@ int main()
   //open the database
   char stmt[1024];
   int rc = sqlite3_open("./accounts", &db);
-  sprintf(stmt, "select * from questions;");
+  sprintf(stmt, "select rowid, question, answer1, answer2, answer3, answer4 from questions;");
   sqlite3_exec(db, stmt, getQuestions, nullptr, nullptr);
   /* crearea unui socket */
   if ((sd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
@@ -139,7 +130,7 @@ bool sendUpdate(void *arg0, void *arg1)
   thData tdL = *((struct thData *)arg0);
   userInfo *uAcc = (struct userInfo *)arg1;
   GameData *gData = new GameData;
-  sqlite3_exec(tdL.db, "select username, game_id from games natural join accounts;", callback_update, gData, nullptr);
+  sqlite3_exec(tdL.db, "select username, game_id from games join accounts on id = accounts.rowid;", callback_update, gData, nullptr);
 
   if (write(tdL.cl, gData, sizeof(GameData)) <= 0)
   {
@@ -222,10 +213,14 @@ void runGame(int gameId, void *arg)
   {
     for (int i = 0; i < game->maxPlayers; i++)
     {
+      if(game->playerNo == 1)
+      {
+        break;
+      }
       if (!(game->losers[i]))
       {
         //get random question
-        randQ = random() % questionCount;
+        randQ = random() % questionCount + 1;
         //send question to client
         mess = 1;
         write(game->players[i], &mess, sizeof(int));
@@ -281,26 +276,41 @@ void runGame(int gameId, void *arg)
   } // while
   //signal clients that the game has ended
   mess = 2;
+  char winner[256];
+  for(int i = 0; i < game->maxPlayers; i++)
+  {
+    if(!game->losers[i])
+    {
+      strcpy(winner, game->playerNames[i].c_str());
+      break;
+    }
+  }
   for (int i = 0; i < game->maxPlayers; i++)
   {
     if (write(game->players[i], &mess, sizeof(int)) <= 0)
     {
       //error check
     }
+    if (write(game->players[i], winner, sizeof(winner)) <= 0)
+    {
+      //error check
+    }
   }
   game->active = false;
-  char stmt[256];
+  //char stmt[256];
   sprintf(stmt, "delete from games where game_id = %i", gameId);
   sqlite3_exec(tdL.db, stmt, 0, 0, 0);
 }
 
-bool connectToGame(void *arg, int gameId)
+bool connectToGame(void *arg, int gameId, std::string name)
 {
   thData tdL = *((struct thData *)arg);
   //implement mutex
 
   pthread_mutex_lock(&mutexJoin);
+  games[gameId].playerNames[games[gameId].playerNo] = name; 
   games[gameId].players[games[gameId].playerNo++] = tdL.cl;
+  
   pthread_mutex_unlock(&mutexJoin);
 }
 
@@ -335,7 +345,7 @@ bool processClient(void *arg, void *userData)
         perror("Eroare la read() de la client.\n");
         return true;
       }
-      connectToGame(arg, gameId);
+      connectToGame(arg, gameId, uAcc->username);
       while (games[gameId].active)
       {
         //wait
@@ -369,6 +379,12 @@ static int callback(void *user, int argc, char **argv, char **azColName)
   return 0;
 }
 
+static int checkSignUp(void *mess, int argc, char **argv, char **azColName)
+{
+  int *message = (int *)mess;
+  *message = atoi(argv[0]);
+}
+
 userInfo *connectClient(void *arg)
 {
   int nr, i = 0;
@@ -376,31 +392,60 @@ userInfo *connectClient(void *arg)
   userInfo *uAcc = new userInfo;
   tempInfo *tempAcc = new tempInfo;
   tdL = *((struct thData *)arg);
-
-  if (read(tdL.cl, tempAcc, sizeof(tempInfo)) <= 0)
-  {
-    printf("[Thread %d]\n", tdL.idThread);
-    perror("Eroare la read() de la client.\n");
-    return nullptr;
-  }
-  uAcc->username = tempAcc->username;
-  uAcc->password = tempAcc->password;
+  int mess = 0;
   char stmt[512];
-  int res;
-  char *zErrMsg = 0;
-  sprintf(stmt, "select username, password, id from accounts where username = '%s';", (uAcc->username).c_str());
-  sqlite3_exec(tdL.db, stmt, callback, (void *)uAcc, &zErrMsg);
-  if (uAcc->valid)
+  while (true)
   {
+    if (read(tdL.cl, &mess, sizeof(int)) <= 0)
+    {
+      return nullptr;
+    }
+    if (read(tdL.cl, tempAcc, sizeof(tempInfo)) <= 0)
+    {
+      printf("[Thread %d]\n", tdL.idThread);
+      perror("Eroare la read() de la client.\n");
+      return nullptr;
+    }
 
-    res = 1;
-    write(tdL.cl, &res, sizeof(int));
-  }
-  else
-  {
-    res = 0;
-    write(tdL.cl, &res, sizeof(int));
-  }
+    std::cout << mess << '\n';
+    if (!mess)
+    {
+      sprintf(stmt, "SELECT EXISTS(SELECT 1 FROM accounts WHERE username= '%s' LIMIT 1);", tempAcc->username);
+      sqlite3_exec(tdL.db, stmt, checkSignUp, &mess, 0);
+      std::cout << "mess: " << mess << '\n';
+      if (write(tdL.cl, &mess, sizeof(int)) <= 0)
+      {
+        return nullptr;
+      }
+      if(!mess)
+      {
+        sprintf(stmt, "insert into accounts values ('%s', '%s', 0)", tempAcc->username, tempAcc->password);
+        sqlite3_exec(tdL.db, stmt, 0, 0, 0);
+      }
+    }
+    else
+    {
+      uAcc->username = tempAcc->username;
+      uAcc->password = tempAcc->password;
+      strcpy(stmt, "");
+      int res;
+      char *zErrMsg = 0;
+      sprintf(stmt, "select username, password, rowid from accounts where username = '%s';", (uAcc->username).c_str());
+      sqlite3_exec(tdL.db, stmt, callback, (void *)uAcc, &zErrMsg);
+      if (uAcc->valid)
+      {
 
-  return uAcc;
+        res = 1;
+        write(tdL.cl, &res, sizeof(int));
+        return uAcc;
+      }
+      else
+      {
+        res = 0;
+        write(tdL.cl, &res, sizeof(int));
+      }
+
+      
+    }
+  }
 }

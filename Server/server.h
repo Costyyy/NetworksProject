@@ -54,6 +54,7 @@ struct matchData
 {
   bool active = false;
   int players[10];
+  std::string playerNames[10];
   int playerNo;
   int maxPlayers;
   int score[10] = {0};

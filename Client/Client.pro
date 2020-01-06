@@ -20,20 +20,23 @@ SOURCES += \
     gamewindow.cpp \
     main.cpp \
     mainwindow.cpp \
-    serverconnection.cpp
+    serverconnection.cpp \
+    signupwindow.cpp
 
 HEADERS += \
     appwindow.h \
     creategame.h \
     gamewindow.h \
     mainwindow.h \
-    serverconnection.h
+    serverconnection.h \
+    signupwindow.h
 
 FORMS += \
     appwindow.ui \
     creategame.ui \
     gamewindow.ui \
-    mainwindow.ui
+    mainwindow.ui \
+    signupwindow.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

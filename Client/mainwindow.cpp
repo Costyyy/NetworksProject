@@ -5,6 +5,7 @@
 #include <QtDebug>
 #include <string>
 #include <iostream>
+#include "signupwindow.h"
 MainWindow::MainWindow(QWidget *parent, serverConnection *connection)
     : QMainWindow(parent),
     ui(new Ui::MainWindow),
@@ -37,6 +38,11 @@ void MainWindow::on_pushButton_login_clicked()
         return;
     }
     std::cout << info->username << "\n" << info->password << '\n';
+    int mess = 1;
+    if(write(conn->sd, &mess, sizeof(int)) <= 0)
+    {
+        return;
+    }
     if (write(conn->sd, info, sizeof(tempInfo)) <= 0)
     {
         perror("[client]Eroare la write() spre server.\n");
@@ -66,3 +72,9 @@ void MainWindow::on_pushButton_login_clicked()
 
 }
 
+
+void MainWindow::on_pushButton_signUp_clicked()
+{
+    signupwindow *win = new signupwindow(this, conn);
+    win->show();
+}

@@ -14,14 +14,18 @@ class GameWindow : public QDialog
 public:
     explicit GameWindow(QWidget *parent = nullptr, serverConnection* = nullptr);
     serverConnection *conn;
+    QWidget *parent;
     ~GameWindow();
 
 private slots:
 
     void on_pushButton_submit_clicked();
 
+    void on_pushButton_finish_clicked();
+
 private:
     Ui::GameWindow *ui;
+
     static void *gameLoop(void *arg);
     pthread_t th;
 };

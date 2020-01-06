@@ -72,9 +72,9 @@ void AppWindow::on_pushButton_create_clicked()
         printf("error at write dc\n");
     }
     CreateGame *gameWindow = new CreateGame(this, conn);
-    gameWindow->setModal(true);
+    //gameWindow->setModal(true);
     //this->hide();
-    gameWindow->exec();
+    gameWindow->show();
 }
 
 
@@ -87,8 +87,8 @@ void AppWindow::on_pushButton_join_clicked()
     write(this->conn->sd, &req, sizeof(int));
     write(this->conn->sd, &gameId, sizeof(int));
     GameWindow *gameWindow = new GameWindow(this, conn);
-    gameWindow->setModal(true);
-    this->hide();
-    gameWindow->exec();
+    //gameWindow->setModal(true);
+    //this->hide();
+    gameWindow->show();
     //open game window
 }

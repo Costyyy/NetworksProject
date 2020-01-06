@@ -36,7 +36,12 @@ void CreateGame::on_pushButton_finish_clicked()
     write(conn->sd, &playerCount, sizeof(int));
     GameWindow *gWindow = new GameWindow(this, conn);
     this->close();
-    gWindow->setModal(true);
-    gWindow->exec();
+   // gWindow->setModal(true);
+    gWindow->show();
 
+}
+
+void CreateGame::on_pushButton_cancel_clicked()
+{
+    this->close();
 }

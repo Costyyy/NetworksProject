@@ -19,6 +19,8 @@ public:
 private slots:
     void on_pushButton_finish_clicked();
 
+    void on_pushButton_cancel_clicked();
+
 private:
     Ui::CreateGame *ui;
     QWidget *prnt;

@@ -21,6 +21,8 @@ private slots:
 
     void on_pushButton_login_clicked();
 
+    void on_pushButton_signUp_clicked();
+
 private:
     Ui::MainWindow *ui;
     AppWindow *appWindow;

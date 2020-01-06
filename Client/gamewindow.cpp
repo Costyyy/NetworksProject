@@ -11,6 +11,7 @@ struct info
 GameWindow::GameWindow(QWidget *parent, serverConnection *connection) :
     QDialog(parent),
     conn(connection),
+    parent(parent),
     ui(new Ui::GameWindow)
 {
     ui->setupUi(this);
@@ -20,6 +21,7 @@ GameWindow::GameWindow(QWidget *parent, serverConnection *connection) :
     ui->radioButton_3->setVisible(false);
     ui->radioButton_4->setVisible(false);
     ui->pushButton_submit->setVisible(false);
+    ui->pushButton_finish->setVisible(false);
 
     info *arg = new info;
     arg->arg1 = conn;
@@ -53,6 +55,11 @@ void *GameWindow::gameLoop(void *arg)
         read(conn->sd, &msg, sizeof(int));
         if(msg == 1)
         {
+            for(int i = 0; i < 4; i++)
+            {
+                buttons[i]->setVisible(true);
+            }
+            ui->pushButton_submit->setVisible(true);
             //update
             read(conn->sd, question, sizeof(questions));
             ui->label_question->setText(question->text);
@@ -81,17 +88,27 @@ void *GameWindow::gameLoop(void *arg)
         else if(msg == 2)
         {
             //close thread
+            for(int i = 0; i < 4; i++)
+            {
+                buttons[i]->setVisible(false);
+            }
+            ui->pushButton_submit->setVisible(false);
+
             printf("msg:%i\n", msg);
-            win->close();
+            char buff[256];
+            char endText[512];
+            read(conn->sd, buff, sizeof(buff));
+            sprintf(endText, "%s has won!", buff);
+            printf("msg:%s\n", endText);
+            ui->label_question->setText(endText);
+            ui->pushButton_finish->setVisible(true);
             return nullptr;
         }
         else if(msg == 3)
         {
-            for(int i = 0; i < 4; i++)
-            {
-                buttons[i]->setVisible(true);
-            }
-            ui->pushButton_submit->setVisible(true);
+            ui->label_question->setVisible(true);
+
+            ui->label_question->setText("Waiting For Turn...");
         }
         else if(msg == 4)
         {
@@ -101,7 +118,7 @@ void *GameWindow::gameLoop(void *arg)
             }
             ui->label_question->setText("Correct!");
         }
-        else if(msg == 4)
+        else if(msg == 0)
         {
             for(int i = 0; i < 4; i++)
             {
@@ -172,4 +189,11 @@ void GameWindow::on_pushButton_submit_clicked()
     }
     printf("answ:%i\n", answer);
     write(conn->sd, &answer, sizeof(int));
+}
+
+void GameWindow::on_pushButton_finish_clicked()
+{
+    parent->show();
+    this->setModal(false);
+    this->close();
 }
